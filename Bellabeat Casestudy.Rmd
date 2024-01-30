@@ -1,0 +1,166 @@
+---
+title: 'Google Case study: Bellabeat'
+author: "Sen"
+date: "2023-05-25"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Installing and loading common packages and libraries
+```{r}
+install.packages('tidyverse')
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("lubridate")
+install.packages("janitor")
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(janitor)
+```
+
+## Loading the CSV files
+```{r}
+daily_activity <- read.csv("dailyActivity_merged.csv")
+sleep_day <- read.csv("sleepDay_merged.csv")
+calories_hourly <- read.csv("hourlyCalories_merged.csv")
+intensities_hourly <- read.csv("hourlyIntensities_merged.csv")
+weight_loginfo <- read.csv("weightLogInfo_merged.csv")
+```
+
+## Getting the unique participants each dataframe
+```{r distinct users}
+n_distinct(daily_activity$Id)
+n_distinct(sleep_day$Id)
+n_distinct(calories_hourly$Id)
+n_distinct(intensities_hourly$Id)
+n_distinct(weight_loginfo$Id)
+```
+## summarise data using summary function:
+
+```{r activity info}
+daily_activity %>%  
+  select(TotalSteps,
+         TotalDistance,
+         SedentaryMinutes, Calories) %>%
+  summary()
+```
+
+```{r active minutes per category}
+daily_activity %>%
+  select(VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes) %>%
+  summary()
+```
+
+```{r calories info}
+calories_hourly %>%
+  select(Calories) %>%
+  summary()
+```
+
+```{r sleep info}
+sleep_day %>%
+  select(TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>%
+  summary()
+```
+
+```{r weight info}
+weight_loginfo %>%
+  select(WeightKg, BMI) %>%
+  summary()
+```
+
+
+```{r Intensity info}
+intensities_hourly %>%
+  select(ActivityHour, TotalIntensity, AverageIntensity) %>%
+  summary()
+```
+
+## Plotting a few explorations
+Relationship between Total Steps and Sedentary Minutes: 
+```{r}
+ggplot(data=daily_activity, aes(x=TotalSteps, y=SedentaryMinutes)) + 
+  geom_point() +
+  geom_smooth() +
+  labs(title="Total Steps vs. Sedentary Minutes")
+```
+
+Relationship between Total Steps and Calories?
+```{r}
+ggplot(data=daily_activity, aes(x=TotalSteps, y=Calories)) + 
+  geom_point() + 
+  geom_smooth() + 
+  labs(title="Total Steps vs. Calories")
+```
+
+Relationship between minutes asleep and time in bed? You might expect it to be almost completely linear - are there any unexpected trends?
+```{r}
+ggplot(data=sleep_day, aes(x=TotalMinutesAsleep, y=TotalTimeInBed)) +
+  geom_point() + 
+  labs(title="Total Minutes Asleep vs. Total Time in Bed")
+```
+
+## Convert date time format.
+```{r intensities}
+intensities_hourly$ActivityHour=as.POSIXct(intensities_hourly$ActivityHour, format="%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())
+intensities_hourly$time <- format(intensities_hourly$ActivityHour, format = "%H:%M:%S")
+intensities_hourly$date <- format(intensities_hourly$ActivityHour, format = "%m/%d/%y")
+```
+
+```{r activity}
+daily_activity$ActivityDate=as.POSIXct(daily_activity$ActivityDate, format="%m/%d/%Y", tz=Sys.timezone())
+daily_activity$date <- format(daily_activity$ActivityDate, format = "%m/%d/%y")
+```
+
+```{r sleep}
+sleep_day$SleepDay=as.POSIXct(sleep_day$SleepDay, format="%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())
+sleep_day$date <- format(sleep_day$SleepDay, format = "%m/%d/%y")
+```
+
+
+## Merging these two datasets together
+```{r}
+combined_data <- merge(sleep_day, daily_activity, by = c('Id', 'date'))
+head(combined_data)
+```
+
+## Take a look at how many participants are in this data set.
+
+```{r}
+n_distinct(combined_data$Id)
+```
+## Relationship between Total Minutes Asleep and Sedentry Minutes.
+```{r}
+ggplot(data=combined_data, aes(x=TotalMinutesAsleep, y=SedentaryMinutes)) + 
+geom_point(color='orange') + 
+  geom_smooth() +
+  labs(title="Minutes Asleep vs. Sedentary Minutes")
+```
+
+
+# aggregate data by day of week to summarize averages
+```{r}
+aggregate_data <- mutate(combined_data, day = wday(SleepDay, label = TRUE))
+summary_activity_sleep_data <- aggregate_data %>% 
+  group_by(day) %>% 
+  summarise(AvgDailySteps = mean(TotalSteps),
+            AvgAsleepMinutes = mean(TotalMinutesAsleep),
+            AvgAwakeTimeInBed = mean(TotalTimeInBed), 
+            AvgSedentaryMinutes = mean(SedentaryMinutes),
+            AvgLightlyActiveMinutes = mean(LightlyActiveMinutes),
+            AvgFairlyActiveMinutes = mean(FairlyActiveMinutes),
+            AvgVeryActiveMinutes = mean(VeryActiveMinutes), 
+            AvgCalories = mean(Calories))
+head(summary_activity_sleep_data)
+```
+
+# Plot data by day of week to summarize averages
+```{r} 
+ggplot(data = summary_activity_sleep_data, mapping = aes(x = day, y = AvgDailySteps)) +
+geom_col(fill = "orange") + labs(title = "Daily Step Count")
+```
+
